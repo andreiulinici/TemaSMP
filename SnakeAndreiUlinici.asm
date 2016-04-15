@@ -1,15 +1,16 @@
-; ##############################################################
-;# * * * * * * * * * * * * * * * * * * * * * *                  #
-;# *                        Snake Game                          #                                              *
-;# * * * * * * * * * * * * * * * * * * * * * >     F            #
-; ##############################################################
+;  ##############################################################
+; # * * * * * * * * * * * * * * * * * * * * * *                  #
+; # *                        Snake Game                          # 
+; # * * * * * * * * * * * * * * * * * * * * * >     F            #
+;  ##############################################################
 
-;Acest cod scrie direct in memoria video in loc de int 21H (21H este mai incet)
-;cu exceptia afisarii scorului si a mesajelor. 
-;Programul este incarcat si pe Git
+;Acest cod scrie direct in memoria video in loc de int 21H (21H este
+;mai incet, cu exceptia afisarii scorului si a mesajelor) 
+;Programul este incarcat si pe Git:
+; https://github.com/andreiulinici/TemaSMP
+; Verificati ultima versiune, pentru corectarea bug-urilor
 
 INCLUDE 'emu8086.inc'
-
 
 
 left equ 0
@@ -19,12 +20,18 @@ col equ 40
 right equ left+col
 bottom equ top+row
 
-.model small
+.model small 
+;_text segment use16     
+     
+;org 7C00h ;BIOS-ul va incarca programul nostru la 0x7C00   
+    
+;start:    
+
 .data          
     msg db "Bine ati venit!",0
-    instructiuni db 0AH,0DH,"Folositi tastele W, A, S, D pentru a controla sarpele.",0AH,0DH,"Folositi tasta Q pentru a iesi.",0DH,0AH, " $"
+    instructiuni db 0AH,0DH,"Pentru a continua, apasati orice tasta!$"
     quitmsg db "Multumesc pentru joc!",0
-    gameovermsg db "Ai intrat in zid! Game over! ", 0
+    gameovermsg db "Ati intrat in zid! Game over! ", 0
     scoremsg db "Scor: ",0
     head db '^',10,10
     body db '*',10,11, 3*15 DUP(0)
@@ -34,67 +41,59 @@ bottom equ top+row
     fruity db 8
     gameover db 0
     quit db 0   
-    delaytime db 5   ; poti modifica viteza de afisare
-
+    delaytime db 5 
 
 .stack
-    dw   128  dup(0)
-
+    dw   128  dup(0) 
 
 .code
-
 main proc far
 	mov ax, @data
 	mov ds, ax 
 	
 	mov ax, 0b800H
-	mov es, ax
+	mov es, ax 
 	
-	;sterge ecranul
+	
+	; sterge ecranul; se putea si cu procedura CLEAR_SCREEN, predefinita
 	mov ax, 0003H
-	int 10H          	
+	int 10H       
 	
-	lea bx, msg   ;afiseaza mesaj de primire
+    
+	lea bx, msg   ;afiseaza mesaj de bun venit
 	mov dx,00
-	call scrie_caracter1
+	call writecharat ;apeleaza procedura de scriere caracter
+	
+    PRINTN 'Introduceti scorul la care credeti ca ajungeti: '    
+    CALL scan_num ;cheama procedura de citire numar intre  -32767 si 32767
+    PUTC 13 ; trece la inceputul liniei (carriage return)
+    PUTC 10 ; trece pe linia urmatoare (line feed)
+    PRINT "Scorul dorit: "
+    MOV AX, CX ;copiaza numarul in registrul AX
+    CALL print_num ;scrie numarul in registrul AX   
+    PRINT " .. Nu e rau :) "
+    
+    PRINTN ' '
+    PRINTN 'Folositi W, A, S, D pentru a controla sarpele.'
+    PRINTN 'Folositi oricand tasta Q pentru a iesi.'
 	
 	lea dx, instructiuni
 	mov ah, 09H
 	int 21h
-	 
-	
-                              
-    PRINTN 'Introduceti scorul la care credeti ca ajungeti: '    
-    
-    CALL scan_num
-    PUTC 13
-    PUTC 10
-    PRINT "Scorul dorit: "
-    MOV AX, CX
-    CALL print_num  
-    
 
-	;;sterge ecranul
-	;mov ax, 0003H
-	;int 10H
-	
-	
-	
-	PRINTN 'Pentru a continua, apasati orice tasta!'
 	
 	mov ah, 07h
 	int 21h
 	mov ax, 0003H
 	int 10H
-    call printbox      
+    call printbox ; cheama procedura de desenare zid    
     
-    ;CALL print_string
     
 mainloop:       
     call delay             
     lea bx, msg
     mov dx, 00
-    call scrie_caracter1
+    call writestringat
     call shiftsnake
     cmp gameover,1
     je gameover_mainloop
@@ -104,8 +103,7 @@ mainloop:
     je quitpressed_mainloop
     call fruitgeneration
     call draw
-    
-    
+ 
     
     jmp mainloop
     
@@ -115,7 +113,7 @@ gameover_mainloop:
     mov delaytime, 100
     mov dx, 0000H
     lea bx, gameovermsg
-    call scrie_caracter1
+    call writestringat
     call delay    
     jmp quit_mainloop    
     
@@ -125,26 +123,22 @@ quitpressed_mainloop:
     mov delaytime, 100
     mov dx, 0000H
     lea bx, quitmsg
-    call scrie_caracter1
+    call writestringat
     call delay    
-    jmp quit_mainloop    
-
-    
+    jmp quit_mainloop       
     
 
 quit_mainloop:
-
-;sterge ecran
+; sterge ecran
 mov ax, 0003H
 int 10h    
 mov ax, 4c00h
 int 21h  
-                       
 
 
 delay proc 
     
-    ;aceasta procedura foloseste intreruperea 1A 
+    ; aceasta procedura foloseste intreruperea 1A 
     mov ah, 00
     int 1Ah
     mov bx, dx
@@ -152,14 +146,13 @@ delay proc
 jmp_delay:
     int 1Ah
     sub dx, bx
-    ;there are about 18 ticks in a second, 10 ticks are about enough
+    ; sunt aproximativ 18 tick-uri pe secunda
+    ; 10 sunt suficiente
     cmp dl, delaytime                                                      
     jl jmp_delay    
     ret
     
 delay endp
-   
-   
 
 
 fruitgeneration proc
@@ -171,7 +164,7 @@ regenerate:
     je ret_fruitactive
     mov ah, 00
     int 1Ah
-    ;dx contains the ticks
+    ; registrul dx contine tick-urile
     push dx
     mov ax, dx
     xor dx, dx
@@ -193,11 +186,11 @@ regenerate:
     inc fruitx
     
     cmp fruitx, cl
-    jne nevermind
+    jne ceva
     cmp fruity, ch
-    jne nevermind
+    jne ceva
     jmp regenerate             
-nevermind:
+ceva:
     mov al, fruitx
     ror al,1
     jc regenerate
@@ -208,7 +201,7 @@ nevermind:
     
     mov dh, fruity
     mov dl, fruitx
-    call citeste_caracter
+    call readcharat
     cmp bl, '*'
     je regenerate
     cmp bl, '^'
@@ -236,11 +229,11 @@ dispnum proc
     test ax,ax
     jz retz
     xor dx, dx
-    ;ax contine numarul ce urmeaza sa fie afisat
-    ;bx trebuie sa contina 10
+    ; ax contine numarul ce urmeaza sa fie afisat
+    ; bx trebuie sa contina 10
     mov bx,10
     div bx
-    ;afiseaza ax
+    ;dispnum ax first.
     push dx
     call dispnum  
     pop dx
@@ -253,8 +246,8 @@ dispnum endp
 
 
 
-;seteaza pozitia cursorului, ax, bx, dh este linia, dl este coloana
-;retine alte registre
+; seteaza pozitia cursorului, ax, bx, dh este linia, dl este coloana
+; retine alte registre
 setcursorpos proc
     mov ah, 02H
     push bx
@@ -269,7 +262,7 @@ setcursorpos endp
 draw proc
     lea bx, scoremsg
     mov dx, 0109
-    call scrie_caracter1
+    call writestringat
     
     
     add dx, 7
@@ -285,7 +278,7 @@ draw_loop:
     test bl, bl
     jz out_draw
     mov dx, ds:[si+1]
-    call scrie_caracter
+    call writecharat
     add si,3   
     jmp draw_loop 
 
@@ -293,20 +286,18 @@ out_draw:
     mov bl, 'F'
     mov dh, fruity
     mov dl, fruitx
-    call scrie_caracter
+    call writecharat
     mov fruitactive, 1
     
-    ret
-    
-    
+    ret    
     
 draw endp
 
 
 
-;la apasare, dl contine caracterele acsii, altfel contine 0
-;se foloseste dx si ax
-citeste_caracter proc
+; dl contine caracterele ascii la apasare, altfel contine 0
+; se foloseste dx si ax
+readchar proc
     mov ah, 01H
     int 16H
     jnz keybdpressed
@@ -319,18 +310,16 @@ keybdpressed:
     mov dl,al
     ret
 
+readchar endp             
 
-citeste_caracter endp             
-         
-         
 
 keyboardfunctions proc
     
-    call citeste_caracter
+    call readchar
     cmp dl, 0
     je next_14
     
-    ;Taste principale
+    ; Taste principale
     cmp dl, 'w'
     jne next_11
     cmp head, 'v'
@@ -362,21 +351,19 @@ next_14:
     je quit_keyboardfunctions
     ret    
 quit_keyboardfunctions:   
-    ;conditii pentru iesire 
+    ; conditii pentru iesire 
     inc quit
     ret
     
-keyboardfunctions endp                       
-                    
-                    
-                    
-                    
-                    
+keyboardfunctions endp
+
+
+  
 shiftsnake proc     
     mov bx, offset head
     
-    ;determina unde se duce capul sarpelui
-    ;se retine capul
+    ; determina unde se duce capul sarpelui
+    ; se retine capul
     xor ax, ax
     mov al, [bx]
     push ax
@@ -400,17 +387,17 @@ l:
     
 outside:    
     
-    ;Miscare cap in directia potrivita
-    ;Sterge ultimul segment daca sarpele a mancat fructul 
     
+    ; Miscare cap in directia potrivita
+    ; Sterge ultimul segment daca sarpele a mancat fructul 
+	
     pop ax
-    ;al contine directia capului
     
     push dx
-    ;dx contine coordonatele ultimului segment si deci
-    ;putem sa-l folosim pentru stergere.
+	; dx contine coordonatele ultimului segment si deci
+    ; putem sa-l folosim pentru stergere.
     
-    
+    ; al contine directia capului
     lea bx, head
     inc bx
     mov dx, [bx]
@@ -430,36 +417,35 @@ next_1:
 next_2:
     cmp al, '^'
     jne next_3 
-    dec dh               
-                   
-    
+    dec dh
     jmp done_checking_the_head
     
 next_3:
     ; 'v'
     inc dh
     
+    
 done_checking_the_head:    
     mov [bx],dx
-    ;dx contine pozitia capatului   
-    call citeste_caracter1 ;dx
-    ;bl contine rezultatul
+    ; dx contine pozitia capatului  
+    call readcharat ;dx
+    ; bl contine rezultatul
     
     cmp bl, 'F'
-    je mananca
+    je mananca_fruct
     
-    ;sterge ultimul segment daca fructul nu e mancat  
+    ; sterge ultimul segment daca fructul nu e mancat  
     mov cx, dx
     pop dx 
-    cmp bl, '*'    ;cazul in care se musca singur => Game Over
+    cmp bl, '#'    ;cazul in care se musca singur => Game Over
     je game_over
     mov bl, 0
-    call scrie_caracter
+    call writecharat
     mov dx, cx
-        
     
-    
-    ;verifica daca sarpele s-a lovit de zid
+
+	
+    ; verifica daca sarpele s-a lovit de zid
     cmp dh, top
     je game_over
     cmp dh, bottom
@@ -469,18 +455,11 @@ done_checking_the_head:
     cmp dl, right
     je game_over
     
-    
     ret
 game_over:
- 
-    ;;sterge ecranul
-	;mov ax, 0003H
-	;int 10H
-	
     inc gameover
     
-    
-    ; Sunete
+	; sunet: 5 beep-uri
     mov dl, 07h
     mov ah, 2
     int 21h
@@ -498,16 +477,15 @@ game_over:
     int 21h
     
     ret
-mananca:    
+mananca_fruct:
+
+    ;mov dl, 07h  ;beep
+    ;mov ah, 2
+    ;int 21h    
 
     ; adauga segment
     mov al, segmentcount
-    xor ah, ah 
-    
-    
-    ;mov dl, 07h      ; Sunet
-    ;mov ah, 2
-    ;int 21h
+    xor ah, ah
     
     
     lea bx, body
@@ -522,54 +500,53 @@ mananca:
     mov dh, fruity
     mov dl, fruitx
     mov bl, 0
-    call scrie_caracter
+    call writecharat
     mov fruitactive, 0   
     ret 
-shiftsnake endp                
-                               
-                   
-  
-         
-;Playground
+shiftsnake endp
+   
+   
 
+; Printbox
 printbox proc
-;Deseneaza casuta
+    
+
+; Deseneaza zid
     mov dh, top
     mov dl, left
     mov cx, col
     mov bl, '#'
 l1:                 
-    call scrie_caracter
+    call writecharat
     inc dl
     loop l1
     
     mov cx, row
 l2:
-    call scrie_caracter
+    call writecharat
     inc dh
     loop l2
     
     mov cx, col
 l3:
-    call scrie_caracter
+    call writecharat
     dec dl
     loop l3
 
     mov cx, row     
 l4:
-    call scrie_caracter    
+    call writecharat    
     dec dh 
     loop l4    
     
     ret
-printbox endp  
-              
-           
-              
-;dx contine linii si coloane
-;bl contine caractere
-;foloseste di 
-scrie_caracter proc
+printbox endp
+
+
+; dx contine linii si coloane
+; bl contine caractere
+; foloseste di. 
+writecharat proc
     ;80x25
     push dx
     mov ax, dx
@@ -595,14 +572,13 @@ scrie_caracter proc
     mov es:[di], bl
     pop dx
     ret    
-scrie_caracter endp
-                  
-            
-            
-;dx contine linii si coloane
-;returneaza caracter din bi
-;foloseste di
-citeste_caracter1 proc
+writecharat endp
+ 
+ 
+; dx contine linii si coloane
+; returneaza caracter la bl
+; foloseste registrul di
+readcharat proc
     push dx
     mov ax, dx
     and ax, 0FF00H
@@ -625,13 +601,12 @@ citeste_caracter1 proc
     mov bl,es:[di]
     pop dx
     ret
-citeste_caracter1 endp        
-                       
-                       
-                                 
-;dx contine linie, coloana
-;bx contine offset-ul stringului
-scrie_caracter1 proc
+readcharat endp        
+
+
+; dx contine linie, coloana
+; bx contine offset-ul stringului
+writestringat proc
     push dx
     mov ax, dx
     and ax, 0FF00H
@@ -653,33 +628,30 @@ scrie_caracter1 proc
     shl dx,1
     add ax, dx
     mov di, ax
-loop_scrie_caracter1:
+loop_writestringat:
     
     mov al, [bx]
     test al, al
-    jz exit_scrie_caracter1
+    jz exit_writestringat
     mov es:[di], al
     inc di
     inc di
     inc bx
-    jmp loop_scrie_caracter1
+    jmp loop_writestringat
     
     
-exit_scrie_caracter1:
+exit_writestringat:
     pop dx
     ret
     
     
-scrie_caracter1 endp
-     
-     
-     
-     
+writestringat endp
+
+
 DEFINE_SCAN_NUM
 DEFINE_PRINT_STRING
 DEFINE_PRINT_NUM
-DEFINE_PRINT_NUM_UNS
-DEFINE_PTHIS     
+DEFINE_PRINT_NUM_UNS     
      
 ;main endp
           
